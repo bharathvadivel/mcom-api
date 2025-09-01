@@ -10,11 +10,14 @@ async function bootstrap() {
   );
   
   app.useGlobalPipes(new ValidationPipe());
-  app.enableCors();
+  app.enableCors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+  });
   
-  const port = process.env.PORT || 3001;
-  await app.listen(port, '0.0.0.0');
-  console.log(`Application is running on: ${await app.getUrl()}`);
+  const port = 3001;
+  await app.listen(port, '127.0.0.1');
+  console.log('Application is running on: http://localhost:3001');
 }
 
 bootstrap().catch((error) => {

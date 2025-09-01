@@ -1,0 +1,55 @@
+// Prisma schema for authentication
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String?   // null if passwordless
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+  otps          Otp[]
+}
+
+model Otp {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  otpHash   String   // hashed OTP
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  tokenHash  String   // store hash of refresh token
+  deviceInfo String?
+  ipAddress  String?
+  userAgent  String?
+  issuedAt   DateTime @default(now())
+  expiresAt  DateTime
+  revoked    Boolean  @default(false)
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  sessionId String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
+}
