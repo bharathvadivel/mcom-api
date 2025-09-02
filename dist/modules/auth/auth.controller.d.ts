@@ -17,33 +17,89 @@ export declare class AuthController {
     setPassword(dto: SetPasswordDto): Promise<{
         message: string;
     }>;
-    signin(dto: SigninDto): Promise<{
+    signin(dto: SigninDto, req: FastifyRequest): Promise<{
         message: string;
     }>;
-    signinVerifyOtp(dto: VerifyOtpDto): Promise<{
+    signinVerifyOtp(dto: VerifyOtpDto, req: FastifyRequest): Promise<{
         accessToken: string;
         refreshToken: string;
+        sessionId: string;
         expiresIn: number;
+        device: {
+            id: number;
+        } | null;
+        session: {
+            ipAddress: string | null;
+            userAgent: string | null;
+            deviceName: string | null;
+            location: string | null;
+            sessionId: string;
+            createdAt: Date;
+            lastActive: Date;
+            expiresAt: Date;
+            id: number;
+            userId: number;
+            deviceId: number | null;
+        };
     }>;
-    refresh(dto: RefreshTokenDto): Promise<{
+    refresh(dto: RefreshTokenDto, req: FastifyRequest): Promise<{
         accessToken: string;
         refreshToken: string;
+        sessionId: string | undefined;
         expiresIn: number;
     }>;
-    test(): Promise<{
+    test(req: FastifyRequest): Promise<{
         message: string;
         timestamp: string;
+        clientInfo: {
+            ipAddress: string;
+            userAgent: string;
+        };
     }>;
     getMe(req: FastifyRequest): Promise<{
         user: {
+            createdAt: Date;
             id: number;
             email: string;
             isVerified: boolean;
-            createdAt: Date;
             updatedAt: Date;
             otpEnabled: boolean;
             lastLoginAt: Date | null;
+            lastLoginIp: string | null;
         };
+    }>;
+    getSessions(req: FastifyRequest): Promise<{
+        sessions: ({
+            device: {
+                deviceName: string | null;
+                id: number;
+                lastSeen: Date;
+            } | null;
+        } & {
+            ipAddress: string | null;
+            userAgent: string | null;
+            deviceName: string | null;
+            location: string | null;
+            sessionId: string;
+            createdAt: Date;
+            lastActive: Date;
+            expiresAt: Date;
+            id: number;
+            userId: number;
+            deviceId: number | null;
+        })[];
+        devices: {
+            ipAddress: string | null;
+            userAgent: string;
+            deviceName: string | null;
+            id: number;
+            userId: number;
+            firstSeen: Date;
+            lastSeen: Date;
+        }[];
+    }>;
+    revokeSession(req: FastifyRequest, sessionId: string): Promise<{
+        message: string;
     }>;
     generate2FA(req: FastifyRequest): Promise<{
         qrCodeDataURL: string;

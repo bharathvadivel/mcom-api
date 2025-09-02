@@ -13,7 +13,7 @@ model Otp {
   otpHash   String
   expiresAt DateTime
   createdAt DateTime @default(now())
-  user      user     @relation(fields: [userId], references: [id], map: "Otp_userId_fkey")
+  user      User     @relation(fields: [userId], references: [id], map: "Otp_userId_fkey")
 
   @@index([userId], map: "Otp_userId_fkey")
   @@map("otp")
@@ -38,23 +38,48 @@ model RefreshToken {
   issuedAt   DateTime @default(now())
   expiresAt  DateTime
   revoked    Boolean  @default(false)
-  user       user     @relation(fields: [userId], references: [id], map: "RefreshToken_userId_fkey")
+  user       User     @relation(fields: [userId], references: [id], map: "RefreshToken_userId_fkey")
 
   @@index([userId], map: "RefreshToken_userId_fkey")
   @@map("refreshtoken")
 }
 
-model session {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  sessionId String   @unique(map: "Session_sessionId_key")
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  user      user     @relation(fields: [userId], references: [id], map: "Session_userId_fkey")
+model Session {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  sessionId  String   @unique
+  ipAddress  String?
+  userAgent  String?
+  deviceName String?
+  location   String?
+  createdAt  DateTime @default(now())
+  lastActive DateTime @default(now())
+  expiresAt  DateTime
 
-  @@index([userId], map: "Session_userId_fkey")
+  user   User   @relation(fields: [userId], references: [id])
+  device Device? @relation(fields: [deviceId], references: [id])
+
+  deviceId Int?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Device {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  deviceName String?
+  userAgent  String
+  ipAddress  String?
+  firstSeen  DateTime @default(now())
+  lastSeen   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  sessions  Session[]
+
+  @@unique([userId, deviceName], name: "userId_deviceName")
+  @@index([userId])
+  @@map("device")
 }
 
 model tenant {
@@ -65,7 +90,7 @@ model tenant {
   updatedAt DateTime @default(now()) @db.DateTime(6)
 }
 
-model user {
+model User {
   id           Int            @id @default(autoincrement())
   email        String         @unique(map: "User_email_key")
   passwordHash String?
@@ -79,8 +104,11 @@ model user {
   failedLogins Int            @default(0)
   otps          Otp[]
   refreshTokens RefreshToken[]
-  session      session[]
+  sessions      Session[]
   webauthnkey  webauthnkey[]
+  devices       Device[]
+  
+  @@map("user")
 }
 
 model webauthnkey {
@@ -90,7 +118,7 @@ model webauthnkey {
   publicKey    String   @db.Text
   counter      Int      @default(0)
   createdAt    DateTime @default(now()) @db.DateTime(0)
-  user         user     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "webauthnkey_ibfk_1")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "webauthnkey_ibfk_1")
 
   @@index([userId], map: "userId")
 }

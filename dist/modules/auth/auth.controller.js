@@ -38,45 +38,85 @@ let AuthController = class AuthController {
         }
         return this.authService.setPassword(dto);
     }
-    async signin(dto) {
-        return this.authService.signin(dto);
+    async signin(dto, req) {
+        var _a;
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
+        const userAgent = req.headers['user-agent'] || null;
+        try {
+            const result = await this.authService.signin(dto);
+            return result;
+        }
+        catch (error) {
+            throw error;
+        }
     }
-    async signinVerifyOtp(dto) {
-        return this.authService.signinVerifyOtp(dto);
+    async signinVerifyOtp(dto, req) {
+        var _a;
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
+        const userAgent = req.headers['user-agent'] || null;
+        return this.authService.signinVerifyOtp(dto, {
+            ipAddress,
+            userAgent,
+            deviceName: null,
+            location: null,
+        });
     }
-    async refresh(dto) {
+    async refresh(dto, req) {
+        var _a;
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
+        const userAgent = req.headers['user-agent'] || null;
         return this.authService.refresh(dto);
     }
-    async test() {
-        return { message: 'Server is working', timestamp: new Date().toISOString() };
+    async test(req) {
+        var _a;
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || 'unknown';
+        const userAgent = req.headers['user-agent'] || 'unknown';
+        return {
+            message: 'Server is working',
+            timestamp: new Date().toISOString(),
+            clientInfo: {
+                ipAddress,
+                userAgent: userAgent.substring(0, 100)
+            }
+        };
     }
     async getMe(req) {
+        var _a;
         const userId = req.user.sub;
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
+        const userAgent = req.headers['user-agent'] || null;
         return this.authService.getUserProfile(userId);
     }
-    async generate2FA(req) {
-        console.log('2FA Generate endpoint called');
+    async getSessions(req) {
         const userId = req.user.sub;
-        console.log('User ID from token:', userId);
+        return this.authService.getUserSessions(userId);
+    }
+    async revokeSession(req, sessionId) {
+        const userId = req.user.sub;
+        return this.authService.revokeSession(userId, sessionId);
+    }
+    async generate2FA(req) {
+        var _a;
+        const userId = req.user.sub;
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
+        const userAgent = req.headers['user-agent'] || null;
         if (!userId) {
             throw new common_1.BadRequestException('User not found');
         }
         return this.authService.generate2FASecret(userId);
     }
     async verify2FA(req, token) {
-        console.log('2FA Verify endpoint called');
+        var _a;
         const userId = req.user.sub;
-        console.log('User ID from token:', userId);
-        console.log('TOTP token received:', token);
+        const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
+        const userAgent = req.headers['user-agent'] || null;
         if (!token) {
             throw new common_1.BadRequestException('Missing token');
         }
         const isValid = await this.authService.verify2FA(userId, token);
-        console.log('2FA verification result:', isValid);
         if (!isValid) {
             throw new common_1.BadRequestException('Invalid 2FA token');
         }
-        console.log('2FA verification successful - otpEnabled should now be true');
         return { success: true, message: 'Two-factor authentication verified' };
     }
 };
@@ -105,29 +145,33 @@ __decorate([
 __decorate([
     (0, common_1.Post)('signin'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [signin_dto_1.SigninDto]),
+    __metadata("design:paramtypes", [signin_dto_1.SigninDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "signin", null);
 __decorate([
     (0, common_1.Post)('signin/verify-otp'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [verify_otp_dto_1.VerifyOtpDto]),
+    __metadata("design:paramtypes", [verify_otp_dto_1.VerifyOtpDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "signinVerifyOtp", null);
 __decorate([
     (0, common_1.Post)('refresh'),
     (0, common_1.UseGuards)(refresh_token_guard_1.RefreshTokenGuard),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [refresh_token_dto_1.RefreshTokenDto]),
+    __metadata("design:paramtypes", [refresh_token_dto_1.RefreshTokenDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "refresh", null);
 __decorate([
     (0, common_1.Get)('test'),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "test", null);
 __decorate([
@@ -138,6 +182,23 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getMe", null);
+__decorate([
+    (0, common_1.Get)('sessions'),
+    (0, common_1.UseGuards)(access_token_guard_1.AccessTokenGuard),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "getSessions", null);
+__decorate([
+    (0, common_1.Post)('sessions/:sessionId/revoke'),
+    (0, common_1.UseGuards)(access_token_guard_1.AccessTokenGuard),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)('sessionId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "revokeSession", null);
 __decorate([
     (0, common_1.Post)('2fa/generate'),
     (0, common_1.UseGuards)(access_token_guard_1.AccessTokenGuard),
