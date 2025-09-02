@@ -32,4 +32,19 @@ export declare class AuthService {
         refreshToken: string;
         expiresIn: number;
     }>;
+    generate2FASecret(userId: number): Promise<{
+        qrCodeDataURL: string;
+    }>;
+    verify2FA(userId: number, token: string): Promise<boolean>;
+    getUserProfile(userId: number): Promise<{
+        user: {
+            id: number;
+            email: string;
+            isVerified: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            otpEnabled: boolean;
+            lastLoginAt: Date | null;
+        };
+    }>;
 }

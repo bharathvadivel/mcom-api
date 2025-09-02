@@ -47,8 +47,37 @@ let AuthController = class AuthController {
     async refresh(dto) {
         return this.authService.refresh(dto);
     }
+    async test() {
+        return { message: 'Server is working', timestamp: new Date().toISOString() };
+    }
     async getMe(req) {
-        return { user: req.user };
+        const userId = req.user.sub;
+        return this.authService.getUserProfile(userId);
+    }
+    async generate2FA(req) {
+        console.log('2FA Generate endpoint called');
+        const userId = req.user.sub;
+        console.log('User ID from token:', userId);
+        if (!userId) {
+            throw new common_1.BadRequestException('User not found');
+        }
+        return this.authService.generate2FASecret(userId);
+    }
+    async verify2FA(req, token) {
+        console.log('2FA Verify endpoint called');
+        const userId = req.user.sub;
+        console.log('User ID from token:', userId);
+        console.log('TOTP token received:', token);
+        if (!token) {
+            throw new common_1.BadRequestException('Missing token');
+        }
+        const isValid = await this.authService.verify2FA(userId, token);
+        console.log('2FA verification result:', isValid);
+        if (!isValid) {
+            throw new common_1.BadRequestException('Invalid 2FA token');
+        }
+        console.log('2FA verification successful - otpEnabled should now be true');
+        return { success: true, message: 'Two-factor authentication verified' };
     }
 };
 exports.AuthController = AuthController;
@@ -96,6 +125,12 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "refresh", null);
 __decorate([
+    (0, common_1.Get)('test'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "test", null);
+__decorate([
     (0, common_1.Get)('me'),
     (0, common_1.UseGuards)(access_token_guard_1.AccessTokenGuard),
     __param(0, (0, common_1.Req)()),
@@ -103,6 +138,23 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getMe", null);
+__decorate([
+    (0, common_1.Post)('2fa/generate'),
+    (0, common_1.UseGuards)(access_token_guard_1.AccessTokenGuard),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "generate2FA", null);
+__decorate([
+    (0, common_1.Post)('2fa/verify'),
+    (0, common_1.UseGuards)(access_token_guard_1.AccessTokenGuard),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)('token')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "verify2FA", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

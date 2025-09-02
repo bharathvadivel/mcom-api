@@ -30,7 +30,26 @@ export declare class AuthController {
         refreshToken: string;
         expiresIn: number;
     }>;
+    test(): Promise<{
+        message: string;
+        timestamp: string;
+    }>;
     getMe(req: FastifyRequest): Promise<{
-        user: any;
+        user: {
+            id: number;
+            email: string;
+            isVerified: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            otpEnabled: boolean;
+            lastLoginAt: Date | null;
+        };
+    }>;
+    generate2FA(req: FastifyRequest): Promise<{
+        qrCodeDataURL: string;
+    }>;
+    verify2FA(req: FastifyRequest, token: string): Promise<{
+        success: boolean;
+        message: string;
     }>;
 }

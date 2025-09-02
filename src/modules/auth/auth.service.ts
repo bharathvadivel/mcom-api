@@ -12,6 +12,9 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
+import * as speakeasy from 'speakeasy';
+import * as qrcode from 'qrcode';
+
 
 @Injectable()
 export class AuthService {
@@ -58,7 +61,12 @@ export class AuthService {
 	async signup(dto: SignupDto) {
 		let user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 		if (!user) {
-			user = await this.prisma.user.create({ data: { email: dto.email } });
+			user = await this.prisma.user.create({ 
+				data: { 
+					email: dto.email,
+					updatedAt: new Date()
+				} 
+			});
 		}
 		const otp = Math.floor(100000 + Math.random() * 900000).toString();
 		const otpHash = await argon2.hash(otp, { type: argon2.argon2id });
@@ -75,9 +83,14 @@ export class AuthService {
 	}
 
 	async verifyOtp(dto: VerifyOtpDto) {
-		const user = await this.prisma.user.findUnique({ where: { email: dto.email }, include: { otps: true } });
+		const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 		if (!user) throw new BadRequestException('User not found');
-		const latestOtp = user.otps.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+		const otps = await this.prisma.otp.findMany({
+			where: { userId: user.id },
+			orderBy: { createdAt: 'desc' },
+			take: 1
+		});
+		const latestOtp = otps[0];
 		if (!latestOtp) throw new BadRequestException('No OTP found');
 		if (latestOtp.expiresAt < new Date()) throw new BadRequestException('OTP expired');
 		const valid = await argon2.verify(latestOtp.otpHash, dto.otp);
@@ -87,9 +100,14 @@ export class AuthService {
 	}
 
 	async setPassword(dto: SetPasswordDto) {
-		const user = await this.prisma.user.findUnique({ where: { email: dto.email }, include: { otps: true } });
+		const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 		if (!user) throw new BadRequestException('User not found');
-		const latestOtp = user.otps.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+		const otps = await this.prisma.otp.findMany({
+			where: { userId: user.id },
+			orderBy: { createdAt: 'desc' },
+			take: 1
+		});
+		const latestOtp = otps[0];
 		if (!latestOtp) throw new BadRequestException('No OTP found');
 		if (latestOtp.expiresAt < new Date()) throw new BadRequestException('OTP expired');
 		const valid = await argon2.verify(latestOtp.otpHash, dto.otp);
@@ -117,9 +135,14 @@ export class AuthService {
 	}
 
 	async signinVerifyOtp(dto: VerifyOtpDto) {
-		const user = await this.prisma.user.findUnique({ where: { email: dto.email }, include: { otps: true } });
+		const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 		if (!user) throw new BadRequestException('User not found');
-		const latestOtp = user.otps.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+		const otps = await this.prisma.otp.findMany({
+			where: { userId: user.id },
+			orderBy: { createdAt: 'desc' },
+			take: 1
+		});
+		const latestOtp = otps[0];
 		if (!latestOtp) throw new BadRequestException('No OTP found');
 		if (latestOtp.expiresAt < new Date()) throw new BadRequestException('OTP expired');
 		const valid = await argon2.verify(latestOtp.otpHash, dto.otp);
@@ -202,4 +225,75 @@ export class AuthService {
 			expiresIn: parseInt(process.env.JWT_ACCESS_EXPIRES_IN || '600', 10),
 		};
 	}
+	async generate2FASecret(userId: number) {
+  const secret = speakeasy.generateSecret({
+    name: 'M-Commerce SaaS',
+  });
+
+  await this.prisma.user.update({
+    where: { id: userId },
+    data: { otpSecret: secret.base32 },
+  });
+
+  if (!secret.otpauth_url) {
+	throw new Error('Failed to generate otpauth_url for 2FA secret');
+  }
+  const qrCodeDataURL = await qrcode.toDataURL(secret.otpauth_url);
+
+  return { qrCodeDataURL };
+}
+
+async verify2FA(userId: number, token: string) {
+  console.log('AuthService.verify2FA called with userId:', userId, 'token:', token);
+  
+  const user = await this.prisma.user.findUnique({ where: { id: userId } });
+  console.log('User found:', user ? `${user.email} (otpEnabled: ${user.otpEnabled})` : 'null');
+
+  if (!user?.otpSecret) {
+    console.log('2FA not set up - missing otpSecret');
+    throw new Error('2FA not set up');
+  }
+
+  const verified = speakeasy.totp.verify({
+    secret: user.otpSecret,
+    encoding: 'base32',
+    token,
+    window: 1,
+  });
+  
+  console.log('TOTP verification result:', verified);
+
+  if (verified) {
+    console.log('Updating user otpEnabled to true...');
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { otpEnabled: true },
+    });
+    console.log('User otpEnabled updated successfully');
+  }
+
+  return verified;
+}
+
+async getUserProfile(userId: number) {
+  const user = await this.prisma.user.findUnique({ 
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      isVerified: true,
+      otpEnabled: true,
+      otpSecret: false, // Don't expose the secret
+      lastLoginAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+
+  if (!user) {
+    throw new BadRequestException('User not found');
+  }
+
+  return { user };
+}
 }
