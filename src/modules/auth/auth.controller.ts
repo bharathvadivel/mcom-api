@@ -85,7 +85,7 @@ export class AuthController {
 		// 	timestamp: new Date().toISOString()
 		// });
 		
-		return this.authService.refresh(dto);
+		return this.authService.refresh(dto, { ipAddress, userAgent });
 	}
 
 	// Test endpoint - no auth required

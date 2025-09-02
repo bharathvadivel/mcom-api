@@ -33,8 +33,10 @@ model RefreshToken {
   userId     Int
   tokenHash  String
   deviceInfo String?
-  ipAddress  String?
-  userAgent  String?
+  ipAddress  String?          // Legacy field - keep for compatibility
+  hashedIp   String?          // Hashed IP for uniqueness detection
+  truncatedIp String?         // Truncated IP for geolocation
+  userAgent  String?          // Plain text for usability
   issuedAt   DateTime @default(now())
   expiresAt  DateTime
   revoked    Boolean  @default(false)
@@ -45,16 +47,19 @@ model RefreshToken {
 }
 
 model Session {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  sessionId  String   @unique
-  ipAddress  String?
-  userAgent  String?
-  deviceName String?
-  location   String?
-  createdAt  DateTime @default(now())
-  lastActive DateTime @default(now())
-  expiresAt  DateTime
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  sessionId      String   @unique              // Keep original for JWT compatibility
+  sessionIdHash  String?                       // Additional hashed version for security
+  ipAddress      String?                       // Legacy field - keep for compatibility
+  hashedIp       String?                       // Hashed IP for uniqueness detection
+  truncatedIp    String?                       // Truncated IP for geolocation
+  userAgent      String?                       // Plain text for usability
+  deviceName     String?                       // Plain text for usability
+  location       String?
+  createdAt      DateTime @default(now())
+  lastActive     DateTime @default(now())
+  expiresAt      DateTime
 
   user   User   @relation(fields: [userId], references: [id])
   device Device? @relation(fields: [deviceId], references: [id])
@@ -62,15 +67,19 @@ model Session {
   deviceId Int?
 
   @@index([userId])
+  @@index([hashedIp])                          // Index for IP-based queries
+  @@index([sessionIdHash])                     // Index for hashed sessionId queries
   @@map("session")
 }
 
 model Device {
   id         Int      @id @default(autoincrement())
   userId     Int
-  deviceName String?
-  userAgent  String
-  ipAddress  String?
+  deviceName String?                            // Plain text for usability
+  userAgent  String                             // Plain text for usability
+  ipAddress  String?                            // Legacy field - keep for compatibility
+  hashedIp   String?                            // Hashed IP for uniqueness detection
+  truncatedIp String?                           // Truncated IP for geolocation
   firstSeen  DateTime @default(now())
   lastSeen   DateTime @default(now())
 
@@ -79,6 +88,7 @@ model Device {
 
   @@unique([userId, deviceName], name: "userId_deviceName")
   @@index([userId])
+  @@index([hashedIp])                           // Index for IP-based queries
   @@map("device")
 }
 

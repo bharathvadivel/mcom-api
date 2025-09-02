@@ -23,17 +23,20 @@ export declare class AuthController {
     signinVerifyOtp(dto: VerifyOtpDto, req: FastifyRequest): Promise<{
         accessToken: string;
         refreshToken: string;
-        sessionId: string;
+        sessionId: `${string}-${string}-${string}-${string}-${string}`;
         expiresIn: number;
         device: {
             id: number;
         } | null;
         session: {
+            sessionId: `${string}-${string}-${string}-${string}-${string}`;
+            sessionIdHash: string | null;
             ipAddress: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
-            sessionId: string;
             createdAt: Date;
             lastActive: Date;
             expiresAt: Date;
@@ -76,11 +79,14 @@ export declare class AuthController {
                 lastSeen: Date;
             } | null;
         } & {
+            sessionId: string;
+            sessionIdHash: string | null;
             ipAddress: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
-            sessionId: string;
             createdAt: Date;
             lastActive: Date;
             expiresAt: Date;
@@ -90,6 +96,8 @@ export declare class AuthController {
         })[];
         devices: {
             ipAddress: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
             userAgent: string;
             deviceName: string | null;
             id: number;

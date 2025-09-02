@@ -23,6 +23,40 @@ let AuthService = class AuthService {
     constructor(prisma) {
         this.prisma = prisma;
     }
+    async hashSessionId(sessionId) {
+        return await argon2.hash(sessionId, { type: argon2.argon2id });
+    }
+    hashIpAddress(ipAddress) {
+        if (!ipAddress)
+            return '';
+        return crypto.createHash('sha256').update(ipAddress).digest('hex');
+    }
+    truncateIpAddress(ipAddress) {
+        if (!ipAddress)
+            return '';
+        if (ipAddress.includes('.')) {
+            const parts = ipAddress.split('.');
+            if (parts.length === 4) {
+                return `${parts[0]}.${parts[1]}.0.0`;
+            }
+        }
+        if (ipAddress.includes(':')) {
+            const parts = ipAddress.split(':');
+            if (parts.length >= 4) {
+                return `${parts[0]}:${parts[1]}:${parts[2]}:${parts[3]}::`;
+            }
+        }
+        return ipAddress;
+    }
+    processIpAddress(ipAddress) {
+        if (!ipAddress) {
+            return { hashedIp: '', truncatedIp: '' };
+        }
+        return {
+            hashedIp: this.hashIpAddress(ipAddress),
+            truncatedIp: this.truncateIpAddress(ipAddress)
+        };
+    }
     async sendOtpEmail(email, otp) {
         const transporter = nodemailer.createTransport({
             host: process.env.GMAIL_SMTP_HOST || 'smtp.gmail.com',
@@ -129,7 +163,7 @@ let AuthService = class AuthService {
         }
     }
     async signinVerifyOtp(dto, opts) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e, _f, _g;
         const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
         if (!user)
             throw new common_1.BadRequestException('User not found');
@@ -159,10 +193,16 @@ let AuthService = class AuthService {
         });
         const accessToken = this.generateAccessToken(user.id, session.sessionId);
         const { refreshToken, refreshTokenHash, expiresAt } = await this.generateRefreshToken(user.id, session.sessionId);
+        const processedIp = this.processIpAddress((_e = opts === null || opts === void 0 ? void 0 : opts.ipAddress) !== null && _e !== void 0 ? _e : null);
         await this.prisma.refreshToken.create({
             data: {
                 userId: user.id,
                 tokenHash: refreshTokenHash,
+                deviceInfo: device ? `Device ID: ${device.id}` : null,
+                ipAddress: (_f = opts === null || opts === void 0 ? void 0 : opts.ipAddress) !== null && _f !== void 0 ? _f : null,
+                hashedIp: processedIp.hashedIp || null,
+                truncatedIp: processedIp.truncatedIp || null,
+                userAgent: (_g = opts === null || opts === void 0 ? void 0 : opts.userAgent) !== null && _g !== void 0 ? _g : null,
                 expiresAt,
             },
         });
@@ -196,13 +236,14 @@ let AuthService = class AuthService {
             expiresAt: new Date(Date.now() + expiresInSec * 1000),
         };
     }
-    async refresh(dto) {
+    async refresh(dto, ipContext) {
+        var _a, _b, _c;
         const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'changeme';
         let payload;
         try {
             payload = jwt.verify(dto.refreshToken, secret);
         }
-        catch (_a) {
+        catch (_d) {
             throw new common_1.BadRequestException('Invalid refresh token');
         }
         const userId = payload.sub;
@@ -237,10 +278,15 @@ let AuthService = class AuthService {
         }
         const accessToken = this.generateAccessToken(userId, sessionId);
         const { refreshToken, refreshTokenHash, expiresAt } = await this.generateRefreshToken(userId, sessionId);
+        const processedIp = this.processIpAddress((_a = ipContext === null || ipContext === void 0 ? void 0 : ipContext.ipAddress) !== null && _a !== void 0 ? _a : null);
         await this.prisma.refreshToken.create({
             data: {
                 userId,
                 tokenHash: refreshTokenHash,
+                ipAddress: (_b = ipContext === null || ipContext === void 0 ? void 0 : ipContext.ipAddress) !== null && _b !== void 0 ? _b : null,
+                hashedIp: processedIp.hashedIp || null,
+                truncatedIp: processedIp.truncatedIp || null,
+                userAgent: (_c = ipContext === null || ipContext === void 0 ? void 0 : ipContext.userAgent) !== null && _c !== void 0 ? _c : null,
                 expiresAt,
             },
         });
@@ -344,6 +390,7 @@ let AuthService = class AuthService {
         const ipAddress = (_a = ctx.ipAddress) !== null && _a !== void 0 ? _a : null;
         const userAgent = (_b = ctx.userAgent) !== null && _b !== void 0 ? _b : null;
         const location = (_c = ctx.location) !== null && _c !== void 0 ? _c : null;
+        const processedIp = this.processIpAddress(ipAddress);
         let device = null;
         let parsedDeviceName = ctx.deviceName;
         if (userAgent) {
@@ -362,22 +409,31 @@ let AuthService = class AuthService {
                     lastSeen: new Date(),
                     userAgent: userAgent || undefined,
                     ipAddress: ipAddress || undefined,
+                    hashedIp: processedIp.hashedIp || undefined,
+                    truncatedIp: processedIp.truncatedIp || undefined,
                 },
                 create: {
                     userId,
                     deviceName: parsedDeviceName || 'Unknown Device',
                     userAgent: userAgent || '',
                     ipAddress: ipAddress || null,
+                    hashedIp: processedIp.hashedIp || null,
+                    truncatedIp: processedIp.truncatedIp || null,
                     firstSeen: new Date(),
                     lastSeen: new Date(),
                 },
                 select: { id: true },
             });
         }
+        const rawSessionId = crypto.randomUUID();
+        const hashedSessionIdForLogging = await this.hashSessionId(rawSessionId);
         const session = await this.prisma.session.create({
             data: {
                 userId,
-                sessionId: crypto.randomUUID(),
+                sessionId: rawSessionId,
+                sessionIdHash: hashedSessionIdForLogging,
+                hashedIp: processedIp.hashedIp || null,
+                truncatedIp: processedIp.truncatedIp || null,
                 ipAddress: ipAddress !== null && ipAddress !== void 0 ? ipAddress : null,
                 userAgent: userAgent !== null && userAgent !== void 0 ? userAgent : null,
                 deviceName: parsedDeviceName !== null && parsedDeviceName !== void 0 ? parsedDeviceName : null,
@@ -389,7 +445,10 @@ let AuthService = class AuthService {
                     (Number(process.env.SESSION_TTL_SECONDS) || 7 * 24 * 60 * 60) * 1000),
             },
         });
-        return { session, device: device ? { id: device.id } : null };
+        return {
+            session: Object.assign(Object.assign({}, session), { sessionId: rawSessionId }),
+            device: device ? { id: device.id } : null
+        };
     }
 };
 exports.AuthService = AuthService;

@@ -20,6 +20,65 @@ export class AuthService {
   constructor(private prisma: PrismaService) {}
 
   // ---------------------------
+  // Security & Privacy Helpers
+  // ---------------------------
+  
+  /**
+   * Hash sessionId for secure storage
+   */
+  private async hashSessionId(sessionId: string): Promise<string> {
+    return await argon2.hash(sessionId, { type: argon2.argon2id });
+  }
+
+  /**
+   * Hash IP address for privacy while maintaining uniqueness detection
+   */
+  private hashIpAddress(ipAddress: string): string {
+    if (!ipAddress) return '';
+    return crypto.createHash('sha256').update(ipAddress).digest('hex');
+  }
+
+  /**
+   * Truncate IP address to first 2 octets for geolocation while preserving privacy
+   * e.g., "192.168.1.100" -> "192.168.0.0"
+   */
+  private truncateIpAddress(ipAddress: string): string {
+    if (!ipAddress) return '';
+    
+    // Handle IPv4
+    if (ipAddress.includes('.')) {
+      const parts = ipAddress.split('.');
+      if (parts.length === 4) {
+        return `${parts[0]}.${parts[1]}.0.0`;
+      }
+    }
+    
+    // Handle IPv6 - truncate to first 4 groups (64 bits)
+    if (ipAddress.includes(':')) {
+      const parts = ipAddress.split(':');
+      if (parts.length >= 4) {
+        return `${parts[0]}:${parts[1]}:${parts[2]}:${parts[3]}::`;
+      }
+    }
+    
+    return ipAddress; // Return as-is if format not recognized
+  }
+
+  /**
+   * Process IP address for storage - hash for uniqueness, truncate for geolocation
+   */
+  private processIpAddress(ipAddress: string | null): { hashedIp: string; truncatedIp: string } {
+    if (!ipAddress) {
+      return { hashedIp: '', truncatedIp: '' };
+    }
+    
+    return {
+      hashedIp: this.hashIpAddress(ipAddress),
+      truncatedIp: this.truncateIpAddress(ipAddress)
+    };
+  }
+
+  // ---------------------------
   // Email delivery (OTP)
   // ---------------------------
   private async sendOtpEmail(email: string, otp: string) {
@@ -232,14 +291,18 @@ export class AuthService {
       session.sessionId,
     );
 
+    // Process IP for the refresh token
+    const processedIp = this.processIpAddress(opts?.ipAddress ?? null);
+
     await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
         tokenHash: refreshTokenHash,
-        // Optional: store device/session context on token row if you add columns
-        // deviceInfo: device?.deviceName ?? null,
-        // ipAddress: opts?.ipAddress ?? null,
-        // userAgent: opts?.userAgent ?? null,
+        deviceInfo: device ? `Device ID: ${device.id}` : null,
+        ipAddress: opts?.ipAddress ?? null, // Legacy field
+        hashedIp: processedIp.hashedIp || null,
+        truncatedIp: processedIp.truncatedIp || null,
+        userAgent: opts?.userAgent ?? null,
         expiresAt,
       },
     });
@@ -286,7 +349,7 @@ export class AuthService {
   // ---------------------------
   // Refresh (rotate) tokens
   // ---------------------------
-  async refresh(dto: RefreshTokenDto) {
+  async refresh(dto: RefreshTokenDto, ipContext?: { ipAddress?: string | null; userAgent?: string | null }) {
     const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'changeme';
     let payload: any;
     try {
@@ -339,10 +402,17 @@ export class AuthService {
       sessionId,
     );
 
+    // Process IP for the new refresh token
+    const processedIp = this.processIpAddress(ipContext?.ipAddress ?? null);
+
     await this.prisma.refreshToken.create({
       data: {
         userId,
         tokenHash: refreshTokenHash,
+        ipAddress: ipContext?.ipAddress ?? null, // Legacy field
+        hashedIp: processedIp.hashedIp || null,
+        truncatedIp: processedIp.truncatedIp || null,
+        userAgent: ipContext?.userAgent ?? null,
         expiresAt,
       },
     });
@@ -493,6 +563,9 @@ export class AuthService {
     const userAgent = ctx.userAgent ?? null;
     const location = ctx.location ?? null;
 
+    // Process IP address for security and privacy
+    const processedIp = this.processIpAddress(ipAddress);
+
     let device = null as null | { id: number };
     let parsedDeviceName = ctx.deviceName;
 
@@ -522,13 +595,17 @@ export class AuthService {
         update: {
           lastSeen: new Date(),
           userAgent: userAgent || undefined,
-          ipAddress: ipAddress || undefined,
+          ipAddress: ipAddress || undefined, // Legacy field
+          hashedIp: processedIp.hashedIp || undefined,
+          truncatedIp: processedIp.truncatedIp || undefined,
         },
         create: {
           userId,
           deviceName: parsedDeviceName || 'Unknown Device',
           userAgent: userAgent || '',
-          ipAddress: ipAddress || null,
+          ipAddress: ipAddress || null, // Legacy field
+          hashedIp: processedIp.hashedIp || null,
+          truncatedIp: processedIp.truncatedIp || null,
           firstSeen: new Date(),
           lastSeen: new Date(),
         },
@@ -536,13 +613,20 @@ export class AuthService {
       });
     }
 
+    // Generate a raw sessionId and hash it for additional security
+    const rawSessionId = crypto.randomUUID();
+    const hashedSessionIdForLogging = await this.hashSessionId(rawSessionId);
+
     const session = await this.prisma.session.create({
       data: {
         userId,
-        sessionId: crypto.randomUUID(),
-        ipAddress: ipAddress ?? null,
-        userAgent: userAgent ?? null,
-        deviceName: parsedDeviceName ?? null,
+        sessionId: rawSessionId, // Store original for JWT compatibility
+        sessionIdHash: hashedSessionIdForLogging, // Store hash for additional security
+        hashedIp: processedIp.hashedIp || null,
+        truncatedIp: processedIp.truncatedIp || null,
+        ipAddress: ipAddress ?? null, // Keep legacy field for compatibility
+        userAgent: userAgent ?? null, // Plain text for usability
+        deviceName: parsedDeviceName ?? null, // Plain text for usability
         location: location ?? null,
         deviceId: device?.id ?? null,
         createdAt: new Date(),
@@ -555,6 +639,12 @@ export class AuthService {
       },
     });
 
-    return { session, device: device ? { id: device.id } : null };
+    return { 
+      session: { 
+        ...session, 
+        sessionId: rawSessionId // Ensure we return the correct sessionId
+      }, 
+      device: device ? { id: device.id } : null 
+    };
   }
 }

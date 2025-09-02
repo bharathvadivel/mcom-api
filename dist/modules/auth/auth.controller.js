@@ -65,7 +65,7 @@ let AuthController = class AuthController {
         var _a;
         const ipAddress = req.ip || ((_a = req.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress) || null;
         const userAgent = req.headers['user-agent'] || null;
-        return this.authService.refresh(dto);
+        return this.authService.refresh(dto, { ipAddress, userAgent });
     }
     async test(req) {
         var _a;

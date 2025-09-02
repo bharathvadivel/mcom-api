@@ -7,6 +7,10 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 export declare class AuthService {
     private prisma;
     constructor(prisma: PrismaService);
+    private hashSessionId;
+    private hashIpAddress;
+    private truncateIpAddress;
+    private processIpAddress;
     private sendOtpEmail;
     signup(dto: SignupDto): Promise<{
         message: string;
@@ -28,14 +32,17 @@ export declare class AuthService {
     }): Promise<{
         accessToken: string;
         refreshToken: string;
-        sessionId: string;
+        sessionId: `${string}-${string}-${string}-${string}-${string}`;
         expiresIn: number;
         device: {
             id: number;
         } | null;
         session: {
-            sessionId: string;
+            sessionId: `${string}-${string}-${string}-${string}-${string}`;
+            sessionIdHash: string | null;
             ipAddress: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
@@ -49,7 +56,10 @@ export declare class AuthService {
     }>;
     private generateAccessToken;
     private generateRefreshToken;
-    refresh(dto: RefreshTokenDto): Promise<{
+    refresh(dto: RefreshTokenDto, ipContext?: {
+        ipAddress?: string | null;
+        userAgent?: string | null;
+    }): Promise<{
         accessToken: string;
         refreshToken: string;
         sessionId: string | undefined;
@@ -80,7 +90,10 @@ export declare class AuthService {
             } | null;
         } & {
             sessionId: string;
+            sessionIdHash: string | null;
             ipAddress: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
@@ -93,6 +106,8 @@ export declare class AuthService {
         })[];
         devices: {
             ipAddress: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
             userAgent: string;
             deviceName: string | null;
             id: number;
