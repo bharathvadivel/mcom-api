@@ -3,8 +3,10 @@ import { SignupDto } from './dto/signup.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { SigninDto } from './dto/signin.dto';
+
 import * as argon2 from 'argon2';
 import * as jwt from 'jsonwebtoken';
+import * as nodemailer from 'nodemailer';
 
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
@@ -14,6 +16,44 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 @Injectable()
 export class AuthService {
 	constructor(private prisma: PrismaService) {}
+
+	private async sendOtpEmail(email: string, otp: string) {
+		/* Debug: Log the credentials being used (remove this in production)
+		console.log('GMAIL_USER:', process.env.GMAIL_USER);
+		console.log('GMAIL_PASS length:', process.env.GMAIL_PASS?.length);
+		console.log('GMAIL_PASS (first 4 chars):', process.env.GMAIL_PASS?.substring(0, 4));*/
+		
+		const transporter = nodemailer.createTransport({
+			host: process.env.GMAIL_SMTP_HOST || 'smtp.gmail.com',
+			port: parseInt(process.env.GMAIL_SMTP_PORT || '587', 10),
+			secure: false, // true for 465, false for other ports
+			auth: {
+				user: process.env.GMAIL_USER,
+				pass: process.env.GMAIL_PASS,
+			},
+			tls: {
+				rejectUnauthorized: false
+			}
+		});
+		
+		// Verify transporter configuration
+		try {
+			await transporter.verify();
+			console.log('SMTP connection verified successfully');
+		} catch (error) {
+			console.error('SMTP verification failed:', error);
+			throw new BadRequestException('Email service configuration error');
+		}
+		
+		const appName = process.env.GMAIL_APP_NAME || 'Your App';
+		await transporter.sendMail({
+			from: `"${appName}" <${process.env.GMAIL_USER}>`,
+			to: email,
+			subject: `${appName} OTP Verification`,
+			text: `Your OTP code is: ${otp}\nThis code will expire in 10 minutes.`,
+			html: `<p>Your OTP code is: <b>${otp}</b></p><p>This code will expire in 10 minutes.</p>`,
+		});
+	}
 
 	async signup(dto: SignupDto) {
 		let user = await this.prisma.user.findUnique({ where: { email: dto.email } });
@@ -30,7 +70,7 @@ export class AuthService {
 				expiresAt,
 			},
 		});
-		console.log(`OTP for ${dto.email}: ${otp}`);
+		await this.sendOtpEmail(dto.email, otp);
 		return { message: 'OTP sent to email' };
 	}
 
@@ -72,7 +112,7 @@ export class AuthService {
 				expiresAt,
 			},
 		});
-		console.log(`Signin OTP for ${dto.email}: ${otp}`);
+		await this.sendOtpEmail(dto.email, otp);
 		return { message: 'OTP sent to email' };
 	}
 

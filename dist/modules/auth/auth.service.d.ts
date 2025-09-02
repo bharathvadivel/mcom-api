@@ -7,6 +7,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 export declare class AuthService {
     private prisma;
     constructor(prisma: PrismaService);
+    private sendOtpEmail;
     signup(dto: SignupDto): Promise<{
         message: string;
     }>;

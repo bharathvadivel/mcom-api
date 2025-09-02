@@ -12,11 +12,42 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const argon2 = require("argon2");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma.service");
 let AuthService = class AuthService {
     constructor(prisma) {
         this.prisma = prisma;
+    }
+    async sendOtpEmail(email, otp) {
+        const transporter = nodemailer.createTransport({
+            host: process.env.GMAIL_SMTP_HOST || 'smtp.gmail.com',
+            port: parseInt(process.env.GMAIL_SMTP_PORT || '587', 10),
+            secure: false,
+            auth: {
+                user: process.env.GMAIL_USER,
+                pass: process.env.GMAIL_PASS,
+            },
+            tls: {
+                rejectUnauthorized: false
+            }
+        });
+        try {
+            await transporter.verify();
+            console.log('SMTP connection verified successfully');
+        }
+        catch (error) {
+            console.error('SMTP verification failed:', error);
+            throw new common_1.BadRequestException('Email service configuration error');
+        }
+        const appName = process.env.GMAIL_APP_NAME || 'Your App';
+        await transporter.sendMail({
+            from: `"${appName}" <${process.env.GMAIL_USER}>`,
+            to: email,
+            subject: `${appName} OTP Verification`,
+            text: `Your OTP code is: ${otp}\nThis code will expire in 10 minutes.`,
+            html: `<p>Your OTP code is: <b>${otp}</b></p><p>This code will expire in 10 minutes.</p>`,
+        });
     }
     async signup(dto) {
         let user = await this.prisma.user.findUnique({ where: { email: dto.email } });
@@ -33,7 +64,7 @@ let AuthService = class AuthService {
                 expiresAt,
             },
         });
-        console.log(`OTP for ${dto.email}: ${otp}`);
+        await this.sendOtpEmail(dto.email, otp);
         return { message: 'OTP sent to email' };
     }
     async verifyOtp(dto) {
@@ -81,7 +112,7 @@ let AuthService = class AuthService {
                 expiresAt,
             },
         });
-        console.log(`Signin OTP for ${dto.email}: ${otp}`);
+        await this.sendOtpEmail(dto.email, otp);
         return { message: 'OTP sent to email' };
     }
     async signinVerifyOtp(dto) {
