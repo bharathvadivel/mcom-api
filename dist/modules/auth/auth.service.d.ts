@@ -7,10 +7,13 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 export declare class AuthService {
     private prisma;
     constructor(prisma: PrismaService);
-    private hashSessionId;
+    private processSessionId;
+    private decryptSessionId;
     private hashIpAddress;
     private truncateIpAddress;
     private processIpAddress;
+    private decryptIpAddress;
+    getSessionInfo(sessionId: string): Promise<any>;
     private sendOtpEmail;
     signup(dto: SignupDto): Promise<{
         message: string;
@@ -39,16 +42,17 @@ export declare class AuthService {
         } | null;
         session: {
             sessionId: `${string}-${string}-${string}-${string}-${string}`;
-            sessionIdHash: string | null;
-            ipAddress: string | null;
-            hashedIp: string | null;
-            truncatedIp: string | null;
+            encryptedSessionId: string;
+            sessionIdHash: string;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
             createdAt: Date;
             lastActive: Date;
             expiresAt: Date;
+            hashedIp: string | null;
+            truncatedIp: string | null;
+            encryptedIpAddress: string | null;
             id: number;
             userId: number;
             deviceId: number | null;
@@ -71,6 +75,8 @@ export declare class AuthService {
     verify2FA(userId: number, token: string): Promise<boolean>;
     getUserProfile(userId: number): Promise<{
         user: {
+            lastLoginIp: string | null;
+            encryptedLastLoginIp: undefined;
             createdAt: Date;
             id: number;
             email: string;
@@ -78,7 +84,6 @@ export declare class AuthService {
             updatedAt: Date;
             otpEnabled: boolean;
             lastLoginAt: Date | null;
-            lastLoginIp: string | null;
         };
     }>;
     getUserSessions(userId: number): Promise<{
@@ -89,27 +94,27 @@ export declare class AuthService {
                 lastSeen: Date;
             } | null;
         } & {
-            sessionId: string;
-            sessionIdHash: string | null;
-            ipAddress: string | null;
-            hashedIp: string | null;
-            truncatedIp: string | null;
+            encryptedSessionId: string;
+            sessionIdHash: string;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
             createdAt: Date;
             lastActive: Date;
             expiresAt: Date;
+            hashedIp: string | null;
+            truncatedIp: string | null;
+            encryptedIpAddress: string | null;
             id: number;
             userId: number;
             deviceId: number | null;
         })[];
         devices: {
-            ipAddress: string | null;
-            hashedIp: string | null;
-            truncatedIp: string | null;
             userAgent: string;
             deviceName: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
+            encryptedIpAddress: string | null;
             id: number;
             userId: number;
             firstSeen: Date;

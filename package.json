@@ -21,6 +21,7 @@
     "argon2": "^0.44.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "dotenv": "^17.2.2",
     "fastify": "^4.0.0",
     "joi": "^17.0.0",
     "jsonwebtoken": "^9.0.2",

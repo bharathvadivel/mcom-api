@@ -30,16 +30,17 @@ export declare class AuthController {
         } | null;
         session: {
             sessionId: `${string}-${string}-${string}-${string}-${string}`;
-            sessionIdHash: string | null;
-            ipAddress: string | null;
-            hashedIp: string | null;
-            truncatedIp: string | null;
+            encryptedSessionId: string;
+            sessionIdHash: string;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
             createdAt: Date;
             lastActive: Date;
             expiresAt: Date;
+            hashedIp: string | null;
+            truncatedIp: string | null;
+            encryptedIpAddress: string | null;
             id: number;
             userId: number;
             deviceId: number | null;
@@ -61,6 +62,8 @@ export declare class AuthController {
     }>;
     getMe(req: FastifyRequest): Promise<{
         user: {
+            lastLoginIp: string | null;
+            encryptedLastLoginIp: undefined;
             createdAt: Date;
             id: number;
             email: string;
@@ -68,7 +71,6 @@ export declare class AuthController {
             updatedAt: Date;
             otpEnabled: boolean;
             lastLoginAt: Date | null;
-            lastLoginIp: string | null;
         };
     }>;
     getSessions(req: FastifyRequest): Promise<{
@@ -79,27 +81,27 @@ export declare class AuthController {
                 lastSeen: Date;
             } | null;
         } & {
-            sessionId: string;
-            sessionIdHash: string | null;
-            ipAddress: string | null;
-            hashedIp: string | null;
-            truncatedIp: string | null;
+            encryptedSessionId: string;
+            sessionIdHash: string;
             userAgent: string | null;
             deviceName: string | null;
             location: string | null;
             createdAt: Date;
             lastActive: Date;
             expiresAt: Date;
+            hashedIp: string | null;
+            truncatedIp: string | null;
+            encryptedIpAddress: string | null;
             id: number;
             userId: number;
             deviceId: number | null;
         })[];
         devices: {
-            ipAddress: string | null;
-            hashedIp: string | null;
-            truncatedIp: string | null;
             userAgent: string;
             deviceName: string | null;
+            hashedIp: string | null;
+            truncatedIp: string | null;
+            encryptedIpAddress: string | null;
             id: number;
             userId: number;
             firstSeen: Date;

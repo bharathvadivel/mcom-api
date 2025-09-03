@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { parseUserAgent } from '../../utils/ua-parser.helper';
+import { encrypt, decrypt, hash, encryptField, decryptField } from '../../utils/crypto';
 
 import { SignupDto } from './dto/signup.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -24,10 +25,23 @@ export class AuthService {
   // ---------------------------
   
   /**
-   * Hash sessionId for secure storage
+   * Process sessionId for secure storage - encrypt and hash
    */
-  private async hashSessionId(sessionId: string): Promise<string> {
-    return await argon2.hash(sessionId, { type: argon2.argon2id });
+  private async processSessionId(sessionId: string): Promise<{ 
+    encryptedSessionId: string;
+    sessionIdHash: string 
+  }> {
+    return {
+      encryptedSessionId: encryptField(sessionId),
+      sessionIdHash: await argon2.hash(sessionId, { type: argon2.argon2id })
+    };
+  }
+
+  /**
+   * Decrypt sessionId from encrypted storage
+   */
+  private decryptSessionId(encryptedSessionId: string): string {
+    return decryptField(encryptedSessionId);
   }
 
   /**
@@ -65,16 +79,56 @@ export class AuthService {
   }
 
   /**
-   * Process IP address for storage - hash for uniqueness, truncate for geolocation
+   * Process IP address for storage - encrypt, hash for uniqueness, truncate for geolocation
    */
-  private processIpAddress(ipAddress: string | null): { hashedIp: string; truncatedIp: string } {
+  private processIpAddress(ipAddress: string | null): { 
+    encryptedIpAddress: string; 
+    hashedIp: string; 
+    truncatedIp: string 
+  } {
     if (!ipAddress) {
-      return { hashedIp: '', truncatedIp: '' };
+      return { encryptedIpAddress: '', hashedIp: '', truncatedIp: '' };
     }
     
     return {
+      encryptedIpAddress: encryptField(ipAddress),
       hashedIp: this.hashIpAddress(ipAddress),
       truncatedIp: this.truncateIpAddress(ipAddress)
+    };
+  }
+
+  /**
+   * Decrypt IP address from encrypted storage
+   */
+  private decryptIpAddress(encryptedIpAddress: string): string {
+    return decryptField(encryptedIpAddress);
+  }
+
+  /**
+   * Get readable device/session information with decrypted data
+   */
+  async getSessionInfo(sessionId: string): Promise<any> {
+    // Hash the sessionId to find the session
+    const sessionIdHash = await argon2.hash(sessionId, { type: argon2.argon2id });
+    
+    const session = await this.prisma.session.findFirst({
+      where: { sessionIdHash },
+      include: { device: true }
+    });
+
+    if (!session) return null;
+
+    return {
+      ...session,
+      // Decrypt the sessionId for JWT operations
+      decryptedSessionId: session.encryptedSessionId ? this.decryptSessionId(session.encryptedSessionId) : sessionId,
+      // Decrypt the IP address for display purposes
+      decryptedIpAddress: session.encryptedIpAddress ? this.decryptIpAddress(session.encryptedIpAddress) : null,
+      device: session.device ? {
+        ...session.device,
+        // Decrypt device IP if needed
+        decryptedIpAddress: session.device.encryptedIpAddress ? this.decryptIpAddress(session.device.encryptedIpAddress) : null
+      } : null
     };
   }
 
@@ -256,12 +310,13 @@ export class AuthService {
     const valid = await argon2.verify(latestOtp.otpHash, dto.otp);
     if (!valid) throw new BadRequestException('Invalid OTP');
 
-    // Update last login timestamp and IP
+    // Update last login timestamp and encrypted IP
+    const processedLastLoginIp = opts?.ipAddress ? encryptField(opts.ipAddress) : null;
     await this.prisma.user.update({
       where: { id: user.id },
       data: { 
         lastLoginAt: new Date(),
-        lastLoginIp: opts?.ipAddress || null
+        encryptedLastLoginIp: processedLastLoginIp
       },
     });
 
@@ -299,7 +354,7 @@ export class AuthService {
         userId: user.id,
         tokenHash: refreshTokenHash,
         deviceInfo: device ? `Device ID: ${device.id}` : null,
-        ipAddress: opts?.ipAddress ?? null, // Legacy field
+        encryptedIpAddress: processedIp.encryptedIpAddress || null,
         hashedIp: processedIp.hashedIp || null,
         truncatedIp: processedIp.truncatedIp || null,
         userAgent: opts?.userAgent ?? null,
@@ -389,8 +444,10 @@ export class AuthService {
 
     // Optionally update session lastActive if we have a sessionId
     if (sessionId) {
+      // Hash the sessionId to find the session
+      const sessionIdHash = await argon2.hash(sessionId, { type: argon2.argon2id });
       await this.prisma.session.updateMany({
-        where: { sessionId },
+        where: { sessionIdHash },
         data: { lastActive: new Date() },
       });
     }
@@ -409,7 +466,7 @@ export class AuthService {
       data: {
         userId,
         tokenHash: refreshTokenHash,
-        ipAddress: ipContext?.ipAddress ?? null, // Legacy field
+        encryptedIpAddress: processedIp.encryptedIpAddress || null,
         hashedIp: processedIp.hashedIp || null,
         truncatedIp: processedIp.truncatedIp || null,
         userAgent: ipContext?.userAgent ?? null,
@@ -431,9 +488,12 @@ export class AuthService {
   async generate2FASecret(userId: number) {
     const secret = speakeasy.generateSecret({ name: 'M-Commerce SaaS' });
 
+    // Encrypt the OTP secret before storing
+    const encryptedOtpSecret = encryptField(secret.base32);
+    
     await this.prisma.user.update({
       where: { id: userId },
-      data: { otpSecret: secret.base32 },
+      data: { encryptedOtpSecret },
     });
 
     if (!secret.otpauth_url) {
@@ -446,10 +506,13 @@ export class AuthService {
 
   async verify2FA(userId: number, token: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.otpSecret) throw new Error('2FA not set up');
+    if (!user?.encryptedOtpSecret) throw new Error('2FA not set up');
+
+    // Decrypt the OTP secret for verification
+    const otpSecret = decryptField(user.encryptedOtpSecret);
 
     const verified = speakeasy.totp.verify({
-      secret: user.otpSecret,
+      secret: otpSecret,
       encoding: 'base32',
       token,
       window: 1,
@@ -476,16 +539,27 @@ export class AuthService {
         email: true,
         isVerified: true,
         otpEnabled: true,
-        // otpSecret: false, // (Prisma doesn't accept false inside select)
         lastLoginAt: true,
-        lastLoginIp: true,
+        encryptedLastLoginIp: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
     if (!user) throw new BadRequestException('User not found');
-    return { user };
+    
+    // Decrypt the last login IP for display (if available)
+    const lastLoginIp = user.encryptedLastLoginIp 
+      ? this.decryptIpAddress(user.encryptedLastLoginIp) 
+      : null;
+
+    return { 
+      user: {
+        ...user,
+        lastLoginIp, // Decrypted for display
+        encryptedLastLoginIp: undefined // Remove encrypted field from response
+      }
+    };
   }
 
   /**
@@ -522,8 +596,10 @@ export class AuthService {
    * Revoke a specific session
    */
   async revokeSession(userId: number, sessionId: string) {
+    // Hash the sessionId to find the session
+    const sessionIdHash = await argon2.hash(sessionId, { type: argon2.argon2id });
     const session = await this.prisma.session.findFirst({
-      where: { userId, sessionId }
+      where: { userId, sessionIdHash }
     });
 
     if (!session) throw new BadRequestException('Session not found');
@@ -595,7 +671,7 @@ export class AuthService {
         update: {
           lastSeen: new Date(),
           userAgent: userAgent || undefined,
-          ipAddress: ipAddress || undefined, // Legacy field
+          encryptedIpAddress: processedIp.encryptedIpAddress || undefined,
           hashedIp: processedIp.hashedIp || undefined,
           truncatedIp: processedIp.truncatedIp || undefined,
         },
@@ -603,7 +679,7 @@ export class AuthService {
           userId,
           deviceName: parsedDeviceName || 'Unknown Device',
           userAgent: userAgent || '',
-          ipAddress: ipAddress || null, // Legacy field
+          encryptedIpAddress: processedIp.encryptedIpAddress || null,
           hashedIp: processedIp.hashedIp || null,
           truncatedIp: processedIp.truncatedIp || null,
           firstSeen: new Date(),
@@ -613,18 +689,18 @@ export class AuthService {
       });
     }
 
-    // Generate a raw sessionId and hash it for additional security
+    // Generate a raw sessionId and process it for secure storage
     const rawSessionId = crypto.randomUUID();
-    const hashedSessionIdForLogging = await this.hashSessionId(rawSessionId);
+    const processedSessionId = await this.processSessionId(rawSessionId);
 
     const session = await this.prisma.session.create({
       data: {
         userId,
-        sessionId: rawSessionId, // Store original for JWT compatibility
-        sessionIdHash: hashedSessionIdForLogging, // Store hash for additional security
+        encryptedSessionId: processedSessionId.encryptedSessionId, // Store encrypted sessionId
+        sessionIdHash: processedSessionId.sessionIdHash, // Hash for database queries and lookups
         hashedIp: processedIp.hashedIp || null,
         truncatedIp: processedIp.truncatedIp || null,
-        ipAddress: ipAddress ?? null, // Keep legacy field for compatibility
+        encryptedIpAddress: processedIp.encryptedIpAddress || null,
         userAgent: userAgent ?? null, // Plain text for usability
         deviceName: parsedDeviceName ?? null, // Plain text for usability
         location: location ?? null,

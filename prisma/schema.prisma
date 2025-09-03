@@ -29,66 +29,64 @@ model product {
 }
 
 model RefreshToken {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  tokenHash  String
-  deviceInfo String?
-  ipAddress  String?          // Legacy field - keep for compatibility
-  hashedIp   String?          // Hashed IP for uniqueness detection
-  truncatedIp String?         // Truncated IP for geolocation
-  userAgent  String?          // Plain text for usability
-  issuedAt   DateTime @default(now())
-  expiresAt  DateTime
-  revoked    Boolean  @default(false)
-  user       User     @relation(fields: [userId], references: [id], map: "RefreshToken_userId_fkey")
+  id                 Int      @id @default(autoincrement())
+  userId             Int
+  tokenHash          String
+  deviceInfo         String?
+  encryptedIpAddress String?  @db.Text
+  userAgent          String?
+  issuedAt           DateTime @default(now())
+  expiresAt          DateTime
+  revoked            Boolean  @default(false)
+  hashedIp           String?
+  truncatedIp        String?
+  user               User     @relation(fields: [userId], references: [id], map: "RefreshToken_userId_fkey")
 
   @@index([userId], map: "RefreshToken_userId_fkey")
+  @@index([hashedIp])
   @@map("refreshtoken")
 }
 
 model Session {
-  id             Int      @id @default(autoincrement())
-  userId         Int
-  sessionId      String   @unique              // Keep original for JWT compatibility
-  sessionIdHash  String?                       // Additional hashed version for security
-  ipAddress      String?                       // Legacy field - keep for compatibility
-  hashedIp       String?                       // Hashed IP for uniqueness detection
-  truncatedIp    String?                       // Truncated IP for geolocation
-  userAgent      String?                       // Plain text for usability
-  deviceName     String?                       // Plain text for usability
-  location       String?
-  createdAt      DateTime @default(now())
-  lastActive     DateTime @default(now())
-  expiresAt      DateTime
-
-  user   User   @relation(fields: [userId], references: [id])
-  device Device? @relation(fields: [deviceId], references: [id])
-
-  deviceId Int?
+  id                 Int      @id @default(autoincrement())
+  userId             Int
+  encryptedSessionId String   @db.Text
+  sessionIdHash      String   @unique
+  userAgent          String?
+  deviceName         String?
+  location           String?
+  createdAt          DateTime @default(now())
+  lastActive         DateTime @default(now())
+  expiresAt          DateTime
+  deviceId           Int?
+  hashedIp           String?
+  truncatedIp        String?
+  encryptedIpAddress String?  @db.Text
+  device             Device?  @relation(fields: [deviceId], references: [id])
+  user               User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([hashedIp])                          // Index for IP-based queries
-  @@index([sessionIdHash])                     // Index for hashed sessionId queries
+  @@index([hashedIp])
+  @@index([deviceId], map: "session_deviceId_fkey")
   @@map("session")
 }
 
 model Device {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  deviceName String?                            // Plain text for usability
-  userAgent  String                             // Plain text for usability
-  ipAddress  String?                            // Legacy field - keep for compatibility
-  hashedIp   String?                            // Hashed IP for uniqueness detection
-  truncatedIp String?                           // Truncated IP for geolocation
-  firstSeen  DateTime @default(now())
-  lastSeen   DateTime @default(now())
-
-  user      User      @relation(fields: [userId], references: [id])
-  sessions  Session[]
+  id                 Int       @id @default(autoincrement())
+  userId             Int
+  deviceName         String?
+  userAgent          String
+  firstSeen          DateTime  @default(now())
+  lastSeen           DateTime  @default(now())
+  hashedIp           String?
+  truncatedIp        String?
+  encryptedIpAddress String?   @db.Text
+  user               User      @relation(fields: [userId], references: [id])
+  sessions           Session[]
 
   @@unique([userId, deviceName], name: "userId_deviceName")
   @@index([userId])
-  @@index([hashedIp])                           // Index for IP-based queries
+  @@index([hashedIp])
   @@map("device")
 }
 
@@ -101,23 +99,23 @@ model tenant {
 }
 
 model User {
-  id           Int            @id @default(autoincrement())
-  email        String         @unique(map: "User_email_key")
-  passwordHash String?
-  isVerified   Boolean        @default(false)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime
-  otpEnabled   Boolean        @default(false)
-  otpSecret    String?        @db.VarChar(255)
-  lastLoginAt  DateTime?      @db.DateTime(0)
-  lastLoginIp  String?        @db.VarChar(45)
-  failedLogins Int            @default(0)
-  otps          Otp[]
-  refreshTokens RefreshToken[]
-  sessions      Session[]
-  webauthnkey  webauthnkey[]
-  devices       Device[]
-  
+  id                    Int            @id @default(autoincrement())
+  email                 String         @unique(map: "User_email_key")
+  passwordHash          String?
+  isVerified            Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime
+  otpEnabled            Boolean        @default(false)
+  encryptedOtpSecret    String?        @db.Text
+  lastLoginAt           DateTime?      @db.DateTime(0)
+  encryptedLastLoginIp  String?        @db.Text
+  failedLogins          Int            @default(0)
+  devices               Device[]
+  otps                  Otp[]
+  refreshTokens         RefreshToken[]
+  sessions              Session[]
+  webauthnkey           webauthnkey[]
+
   @@map("user")
 }
 
