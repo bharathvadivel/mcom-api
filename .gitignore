@@ -121,8 +121,12 @@ junit.xml
 *.sqlite3
 *.db
 
-# MySQL dump files
+# SQL dump files
 *.sql
+*.dump
+
+# PostgreSQL specific
+*.pgsql
 
 # Temporary files
 tmp/
