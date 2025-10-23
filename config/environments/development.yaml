@@ -1,0 +1,80 @@
+development:
+  database:
+    host: localhost
+    port: 5432
+    username: postgres
+    password: postgres
+    database: mcom_ecommerce_dev
+    ssl: false
+    logging: true
+    synchronize: false
+
+  redis:
+    host: localhost
+    port: 6379
+    password: null
+    db: 0
+    keyPrefix: 'mcom:dev:'
+
+  messaging:
+    provider: nats
+    url: 'nats://localhost:4222'
+    options:
+      maxReconnectAttempts: 10
+      reconnectTimeWait: 2000
+
+  jwt:
+    secret: 'dev-jwt-secret-change-in-production'
+    expiresIn: '24h'
+    refreshSecret: 'dev-refresh-secret-change-in-production'
+    refreshExpiresIn: '30d'
+
+  file:
+    provider: local
+    maxSize: 10485760  # 10MB
+    allowedTypes:
+      - 'image/jpeg'
+      - 'image/png'
+      - 'image/webp'
+      - 'image/gif'
+      - 'application/pdf'
+    uploadPath: './uploads'
+
+  email:
+    provider: smtp
+    host: localhost
+    port: 1025  # MailHog for development
+    username: null
+    password: null
+    from: 'noreply@mcom.dev'
+
+  monitoring:
+    enabled: true
+    prometheus:
+      enabled: true
+      port: 9090
+    grafana:
+      enabled: true
+      port: 3010
+    jaeger:
+      enabled: false
+
+  logging:
+    level: debug
+    format: pretty
+    enableSqlLogging: true
+
+  rateLimit:
+    windowMs: 900000  # 15 minutes
+    max: 1000  # requests per window
+    
+  cors:
+    origin: true
+    credentials: true
+
+  swagger:
+    enabled: true
+    title: 'MCOM eCommerce API'
+    description: 'Multi-tenant eCommerce SaaS platform API'
+    version: '1.0.0'
+    path: 'api/docs'

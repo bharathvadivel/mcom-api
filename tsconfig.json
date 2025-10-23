@@ -6,14 +6,46 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "es2017",
+    "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
     "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
     "strict": true,
-    "skipLibCheck": true
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@mcom/common": ["libs/common/src"],
+      "@mcom/common/*": ["libs/common/src/*"],
+      "@mcom/database": ["libs/database/src"],
+      "@mcom/database/*": ["libs/database/src/*"],
+      "@mcom/messaging": ["libs/messaging/src"],
+      "@mcom/messaging/*": ["libs/messaging/src/*"],
+      "@mcom/types": ["libs/types/src"],
+      "@mcom/types/*": ["libs/types/src/*"],
+      "@mcom/auth": ["libs/auth/src"],
+      "@mcom/auth/*": ["libs/auth/src/*"],
+      "@mcom/cache": ["libs/cache/src"],
+      "@mcom/cache/*": ["libs/cache/src/*"],
+      "@mcom/validation": ["libs/validation/src"],
+      "@mcom/validation/*": ["libs/validation/src/*"]
+    }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "apps/**/*",
+    "libs/**/*",
+    "global.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
 }

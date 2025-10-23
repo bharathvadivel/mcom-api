@@ -1,0 +1,88 @@
+production:
+  database:
+    host: ${DATABASE_HOST}
+    port: ${DATABASE_PORT}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    database: ${DATABASE_NAME}
+    ssl: true
+    logging: false
+    synchronize: false
+    
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT}
+    password: ${REDIS_PASSWORD}
+    db: 0
+    keyPrefix: 'mcom:prod:'
+    tls: true
+
+  messaging:
+    provider: nats
+    url: ${NATS_URL}
+    options:
+      maxReconnectAttempts: 20
+      reconnectTimeWait: 5000
+      tls: true
+
+  jwt:
+    secret: ${JWT_SECRET}
+    expiresIn: '1h'
+    refreshSecret: ${JWT_REFRESH_SECRET}
+    refreshExpiresIn: '7d'
+
+  file:
+    provider: s3
+    maxSize: 52428800  # 50MB
+    allowedTypes:
+      - 'image/jpeg'
+      - 'image/png'
+      - 'image/webp'
+      - 'image/gif'
+      - 'application/pdf'
+      - 'text/plain'
+    bucket: ${S3_BUCKET}
+    region: ${AWS_REGION}
+    
+  email:
+    provider: ses
+    region: ${AWS_REGION}
+    from: ${EMAIL_FROM_ADDRESS}
+
+  monitoring:
+    enabled: true
+    prometheus:
+      enabled: true
+      port: 9090
+    grafana:
+      enabled: true
+      port: 3000
+    jaeger:
+      enabled: true
+      endpoint: ${JAEGER_ENDPOINT}
+
+  logging:
+    level: info
+    format: json
+    enableSqlLogging: false
+
+  rateLimit:
+    windowMs: 900000  # 15 minutes
+    max: 100  # requests per window per IP
+    
+  cors:
+    origin: ${ALLOWED_ORIGINS}
+    credentials: true
+
+  swagger:
+    enabled: false  # Disabled in production
+
+  security:
+    helmet:
+      enabled: true
+      contentSecurityPolicy: true
+      hsts: true
+    
+  cache:
+    defaultTTL: 3600  # 1 hour
+    maxKeys: 10000
